@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+"""Register main accounts and prepare their Claude directories; no credentials are read or stored."""
+import argparse
+from _accounts import TEMPLATE, claude_dir, claude_identity, codex_current, link, path, registry, resolve
+from _backends import atomic
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest='command', required=True)
+    sub.add_parser('init', help='write accounts.json with the INDIVIDUAL/TEAM example; edit it for other names')
+    linked = sub.add_parser('link', help="create an account's Claude directory (links CLAUDE.md and projects/, copies settings.json)")
+    linked.add_argument('name')
+    sub.add_parser('list', help='accounts with their Claude login and the active Codex key')
+    sub.add_parser('current', help='account of the active Codex key')
+    args = parser.parse_args()
+    try:
+        if args.command == 'init':
+            if path().is_file():
+                parser.exit(1, str(path()) + ' already exists; edit it directly\n')
+            atomic(path(), TEMPLATE)
+            print('wrote ' + str(path()))
+            return
+        accounts = registry()
+        if args.command == 'current':
+            print(codex_current(accounts))
+            return
+        if not accounts:
+            parser.exit(1, 'no accounts registered; run: llm-account init\n')
+        if args.command == 'link':
+            name = resolve(args.name, accounts)
+            for line in link(name, accounts) or ['nothing to do for ' + name]:
+                print(line)
+            return
+        try:
+            active = codex_current(accounts)
+        except ValueError:
+            active = None
+        for name, entry in accounts.items():
+            folder = claude_dir(name, accounts)
+            login = claude_identity(folder) if folder is None or folder.is_dir() else 'directory not created'
+            print(name + ('  (' + ', '.join(entry['aliases']) + ')' if entry.get('aliases') else ''))
+            print('  claude: ' + str(folder or '~/.claude (default)') + '  ' + login)
+            print('  codex:  ' + ('unknown (ocx unavailable)' if active is None else 'active key' if active == name else 'not active'))
+    except ValueError as exc:
+        parser.exit(2, 'llm-account: ' + str(exc) + '\n')
+
+if __name__ == '__main__':
+    main()

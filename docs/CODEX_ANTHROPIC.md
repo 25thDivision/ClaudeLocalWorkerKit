@@ -19,7 +19,7 @@ Codex CLI를 오케스트레이터로 쓰면서 메인 모델을 Anthropic API �
 | Codex CLI | `/usr/local/bin/codex` (전역) 또는 `~/.local/bin/codex` | 공식 설치 스크립트. 로그인은 sudo 없이 본인 계정으로 |
 | OpenCodex | `~/.local/opt/opencodex/ocx`, 심링크 `~/.local/bin/ocx` | 릴리스 tar(sha256 검증). Node 불필요 |
 | API 키 파일 | `~/.config/opencodex/keys.env` (0600, `KEY=VALUE`) | `ANTHROPIC_API_KEY` 이름은 쓰지 않는다 |
-| 공급자 | `ocx provider add anthropic-apikey --api-key '${ANTHROPIC_API_KEY_PRIMARY}'` | 값이 아니라 변수 참조를 저장하고 요청 시점에 프록시가 해석 |
+| 공급자 | `ocx provider add anthropic-apikey --api-key '${ANTHROPIC_API_KEY_INDIVIDUAL}'` | 값이 아니라 변수 참조를 저장하고 요청 시점에 프록시가 해석 |
 | 프록시 서비스 | systemd 유저 유닛 `opencodex-proxy.service` | 드롭인 `EnvironmentFile=%h/.config/opencodex/keys.env` |
 | Codex 프로파일 | `~/.codex/orch.config.toml` | `model`, `model_reasoning_effort`, `sandbox_mode = "workspace-write"` |
 | 프로파일 선택 | `<설정 디렉터리>/codex-profile` 파일, 키트 `shell.sh`가 `LLM_CODEX_PROFILE`로 export | `codex-main`이 `-p <이름>`을 붙인다. 직접 실행은 `codex -p orch`. `shell.sh`는 `./install.sh --setup-path`가 생성 |
@@ -40,7 +40,7 @@ codex-bootstrap --probe              # 설정 뒤 과금되는 요청 1건으로
    실제 `bwrap` 동작, 기존 `codex`/`ocx` 설치를 먼저 읽고 필요한 단계만 수행한다. 두 번 실행해도 변경이 없다.
 2. **sudo 경계**: root가 필요한 단계는 `--sudo`를 줄 때만 실행하고, 아니면 정확한 명령을 출력한다.
 3. **비밀 비접촉**: 키 값은 읽지도 출력하지도 않는다. `keys.env`는 변수명만 든 0600 템플릿으로 만들고 사용자가 편집한다.
-   공급자 등록은 `${변수}` 참조로, 두 번째 키는 `ocx account add-key` stdin 절차를 안내한다.
+   공급자 등록은 `${변수}` 참조로, 두 번째 키도 `${변수}` 문자열을 `ocx account add-key` stdin으로 넣는 절차를 안내한다.
 4. **검증 내장**: 서비스 기동 후 헬스 체크, 프록시 프로세스 환경에 변수 이름이 있는지(`/proc`), 모델 탐색이 401 없이 되는지 확인한다.
 
 기본 모델과 reasoning effort는 대화형 실행에서 먼저 묻는다(모델: Fable 5.2 / Opus 5.5 / 직접 입력, effort: low~max).
@@ -66,6 +66,8 @@ codex-duo                  # 키트 오케스트레이터 (LLM_CODEX_PROFILE 적
 ```
 
 - 활성 키 전환: `ocx account use anthropic-apikey <id>`. 어느 워크스페이스에 과금되는지는 활성 키가 정한다.
+  계정을 등록해 두면 `codex-duo --account <이름>`이 시작할 때 대신 전환한다. [메인 계정 선택](ACCOUNTS.md) 참고.
+  기본 변수명 `ANTHROPIC_API_KEY_INDIVIDUAL`, `ANTHROPIC_API_KEY_TEAM`의 접미사가 그 계정 이름이다.
 - 매 턴 Codex가 보내는 도구 정의가 약 19K 토큰이다. 캐시 쓰기/읽기 요금이 적용되므로 Console의 Cost에서 실제 차감을 확인한다.
 - Anthropic은 제3자 프록시 경유 계정을 제한할 수 있다(OpenCodex README 경고). 본인 책임 하에 사용한다.
 
@@ -82,7 +84,8 @@ codex-duo                  # 키트 오케스트레이터 (LLM_CODEX_PROFILE 적
 | `~/.codex/shell_snapshots/*.sh`에 키 평문 | `.bashrc`에서 키를 export하면 Codex가 셸 환경을 스냅샷 | `.bashrc`에서 keys.env source 제거. 서비스가 파일을 직접 읽음 |
 | `~/.claude/agents/ocx-*.md`가 생김 | OpenCodex의 Claude Code 연동이 기본 켜짐 | `ocx integration native claude off` (켜면 다시 생성됨) |
 | `codex exec`가 출력 없이 대기 | 프롬프트 인자가 있어도 stdin을 추가 입력으로 읽음 | `< /dev/null` |
-| 두 번째 키가 `config.json`에 평문 | `ocx account add-key`는 값을 저장(0600) | 참조 형태를 원하면 공급자의 첫 키만 `${변수}`로 등록 |
+| 두 번째 키가 `config.json`에 평문 | `ocx account add-key`에 키 값을 넣으면 값을 저장(0600) | 값 대신 `${변수}` 문자열을 stdin으로 넣으면 참조로 저장된다. `printf %s '${ANTHROPIC_API_KEY_TEAM}' \| ocx account add-key anthropic-apikey --label TEAM` |
+| 키를 추가했더니 과금 계정이 바뀜 | `ocx account add-key`는 추가한 키를 바로 활성으로 만든다 | `ocx account use anthropic-apikey <id>`로 되돌린다 |
 
 ## 확인된 버전
 

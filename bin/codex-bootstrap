@@ -28,7 +28,7 @@ PROVIDER = 'anthropic-apikey'
 SERVICE = 'opencodex-proxy.service'
 PROXY_URL = os.environ.get('CODEX_BOOTSTRAP_PROXY_URL', 'http://127.0.0.1:10100')  # override only for offline tests
 CODEX_INSTALL_URL = 'https://chatgpt.com/codex/install.sh'
-KEY_VARS = ('ANTHROPIC_API_KEY_PRIMARY', 'ANTHROPIC_API_KEY_SECONDARY')
+KEY_VARS = ('ANTHROPIC_API_KEY_INDIVIDUAL', 'ANTHROPIC_API_KEY_TEAM')  # suffixes are the llm-account names
 HOME = Path.home()
 CODEX_HOME = Path(os.environ.get('CODEX_HOME') or HOME / '.codex')
 KEYS_FILE = HOME / '.config/opencodex/keys.env'
@@ -347,7 +347,9 @@ def step_provider(args, info):
         if len(rows) >= len(args.key_vars):
             note('key pool', 'ok', str(len(rows)) + ' keys registered')
         else:
-            note('key pool', 'todo', 'optional second key: printf %s "$' + args.key_vars[1] + '" | ocx account add-key ' + PROVIDER + ' --label secondary  (stdin only; stored in ~/.opencodex/config.json, 0600)')
+            # Piping the ${VARIABLE} text itself registers a reference, so config.json holds no key value.
+            label = args.key_vars[1].removeprefix('ANTHROPIC_API_KEY_') or 'secondary'
+            note('key pool', 'todo', "optional second key: printf %s '${" + args.key_vars[1] + "}' | ocx account add-key " + PROVIDER + ' --label ' + label + '  (registers the reference, not the value; the added key becomes active)')
 
 
 def dropin_text():

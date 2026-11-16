@@ -12,6 +12,7 @@ import time
 from _worker_pool import BIN, create, home, identity, owned, stop, alive, repository_root
 from _backends import atomic
 from _main_policy import NATIVE_DEFAULT, NATIVE_MODES, native_args
+from _accounts import choose, ensure_claude_dir, registry
 
 def launch(kind, args):
     p = argparse.ArgumentParser(description=__doc__)
@@ -23,6 +24,7 @@ def launch(kind, args):
     p.add_argument('-C', '--project', type=Path, default=Path.cwd())
     p.add_argument('--label', action='append', default=[])
     p.add_argument('-n', '--name', help='main session display name (worker ownership still uses IDs)')
+    p.add_argument('--account', help='registered main account (llm-account list); a terminal without it asks')
     p.add_argument('--probe', action='store_true', help='explicitly check selected APIs before starting the pool; sends model requests')
     p.add_argument('--native-agents', choices=NATIVE_MODES, default=NATIVE_DEFAULT, help='default selective: allow EGM and difficult reasoning; off disables native delegation; ordinary work stays managed')
     modes = p.add_mutually_exclusive_group()
@@ -67,6 +69,10 @@ def launch(kind, args):
         p.error('tmux is required for --panes')
     if not 1 <= a.max_workers <= 32:
         p.error('max-workers must be 1..32')
+    # Decide the main's account before the pool exists; only the main receives it, never the workers.
+    account = choose(kind, a.account)
+    if account and kind == 'claude':
+        ensure_claude_dir(account)
     split = lambda value: value.split(',') if value else []
     folder, data = create(project, kind, a.workers, split(a.backends), split(a.models), split(a.profiles), a.label, ' '.join(a.words), a.max_workers)
     data['native_agents'] = native_mode
@@ -93,12 +99,17 @@ def launch(kind, args):
     main = [str(BIN / (kind + '-main')), '--native-agents', native_mode, *forward]
     if a.name:
         main[1:1] = ['--name', a.name]
+    if account:
+        main[1:1] = ['--account', account]
     print('Owned pool: ' + data['pool_id'] + ' | ' + str(len(data['workers'])) + ' workers | ' + ('panes' if a.panes else 'headless'), flush=True)
     if a.panes:
         session = data['tmux_session']
         prefix = ['env', 'LLM_POOL_DIR=' + str(folder), 'LLM_TASK_HOME=' + data['state_dir']]
         subprocess.run(['tmux', 'new-session', '-d', '-s', session, '-c', str(project), '-x', '200', '-y', '60', shlex.join(prefix + main)], check=True)
         try:
+            if kind == 'codex' and registry():
+                # The proxy's active key can change while this session runs, so show it live.
+                subprocess.run(['tmux', 'set-option', '-t', session, 'status-right', '#(' + shlex.quote(str(BIN / 'llm-account')) + ' current) %H:%M'], check=True)
             for slot in data['workers']:
                 command = [str(BIN / 'llm-worker'), 'serve', '--pool-dir', str(folder), '--worker-id', slot['worker_id']]
                 pane = subprocess.check_output(['tmux', 'split-window', '-P', '-F', '#{pane_id}', '-t', session, '-c', str(project), shlex.join(command)], text=True).strip()

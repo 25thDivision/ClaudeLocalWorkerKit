@@ -6,9 +6,20 @@ from pathlib import Path
 import sys
 from _kit_env import configure
 from _main_policy import native_args, render
+from _accounts import PROVIDER, choose, codex_current, codex_use, registry, take_account
 configure()
 try:
     native_mode, forward = native_args(sys.argv[1:])
+    account, forward = take_account(forward)
+    # A registered account selects the proxy's active API key; without accounts.json nothing changes.
+    shown = choose('codex', account)
+    if shown:
+        codex_use(shown)
+    elif registry():
+        try:
+            shown = codex_current()
+        except ValueError:
+            shown = ''
 except ValueError as exc:
     print('codex-main: ' + str(exc), file=sys.stderr)
     raise SystemExit(2)
@@ -29,6 +40,13 @@ if os.environ.get('LLM_POOL_DIR'):
     for key in ('LLM_POOL_DIR', 'LLM_TASK_HOME', 'LLM_POOL_HOME', 'LLM_WORKER_CONF_DIR', 'LLM_MAIN_NATIVE_AGENTS', 'PATH'):
         if key in os.environ:
             managed += ['-c', 'shell_environment_policy.set.' + key + '=' + json.dumps(os.environ[key])]
+if shown:
+    print('Account: ' + shown + ' (' + PROVIDER + ' active key; change it with: ocx account use ' + PROVIDER + ' <id>)', file=sys.stderr, flush=True)
+    # Codex would replace the title with the project name; keep the account visible to tmux instead.
+    managed += ['-c', 'tui.terminal_title=[]']
+    if sys.stdout.isatty():
+        sys.stdout.write('\033]2;codex [' + shown + ']\033\\')
+        sys.stdout.flush()
 # Options after -- are prompt text, so insert launcher configuration before it.
 cut = forward.index('--') if '--' in forward else len(forward)
 # Optional Codex profile ($CODEX_HOME/<name>.config.toml) when the caller passes none.

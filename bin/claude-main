@@ -15,6 +15,7 @@ POLICY="$KIT/prompts/orchestrator.md"
 MODEL="${ORCHESTRATOR_MODEL:-opus}"
 NAME="${ORCHESTRATOR_NAME:-}"
 NATIVE_AGENTS=selective
+ACCOUNT=""
 DENIED=(Workflow TeamCreate "Bash(claude)" "Bash(claude *)")
 ARGS=()
 EXTRA_PROMPT=""
@@ -24,6 +25,12 @@ while [ $# -gt 0 ]; do
             [ $# -ge 2 ] || { echo '--native-agents requires off or selective' >&2; exit 2; }
             NATIVE_AGENTS="$2"; shift 2 ;;
         --native-agents=*) NATIVE_AGENTS="${1#*=}"; shift ;;
+        --account)
+            [ $# -ge 2 ] && [ -n "$2" ] || { echo '--account requires a name' >&2; exit 2; }
+            ACCOUNT="$2"; shift 2 ;;
+        --account=*)
+            ACCOUNT="${1#*=}"; shift
+            [ -n "$ACCOUNT" ] || { echo '--account requires a name' >&2; exit 2; } ;;
         --model)
             [ $# -ge 2 ] || { echo 'missing model value' >&2; exit 2; }
             MODEL="$2"; shift 2 ;;
@@ -53,6 +60,20 @@ if [ "$NATIVE_AGENTS" = off ]; then
     DENIED+=(Agent Task Skill)
     NATIVE_ENV+=(CLAUDE_CODE_DISABLE_EXPLORE_PLAN_AGENTS=1 CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS=1)
 fi
+# A registered account selects the Claude config directory and labels the status line with the
+# login Claude Code reports for it. Without accounts.json this prints nothing and changes nothing.
+ACCOUNT_OUT="$(python3 "$(dirname "$(readlink -f "$0")")/_accounts.py" claude ${ACCOUNT:+--account "$ACCOUNT"})" || exit $?
+mapfile -t ACCOUNT_INFO <<< "$ACCOUNT_OUT"
+ACCOUNT_UNSET=(); ACCOUNT_ENV=(); ACCOUNT_ARGS=()
+if [ -n "${ACCOUNT_INFO[0]:-}" ]; then
+    if [ -n "${ACCOUNT_INFO[1]:-}" ]; then ACCOUNT_ENV+=(CLAUDE_CONFIG_DIR="${ACCOUNT_INFO[1]}"); else ACCOUNT_UNSET+=(-u CLAUDE_CONFIG_DIR); fi
+fi
+# A caller's own --settings is left alone rather than combined with the account status line.
+OWN_SETTINGS=0
+for arg in "${ARGS[@]}"; do
+    case "$arg" in --) break ;; --settings|--settings=*) OWN_SETTINGS=1 ;; esac
+done
+if [ "$OWN_SETTINGS" = 0 ] && [ -n "${ACCOUNT_INFO[2]:-}" ]; then ACCOUNT_ARGS+=(--settings "${ACCOUNT_INFO[2]}"); fi
 if [ -z "$NAME" ]; then
     if [ -n "${LLM_POOL_DIR:-}" ]; then
         NAME="orchestrator-$(basename "$LLM_POOL_DIR")"
@@ -108,7 +129,9 @@ exec env \
   -u LLM_EFFORT \
   -u CLAUDE_CODE_DISABLE_EXPLORE_PLAN_AGENTS \
   -u CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS \
+  "${ACCOUNT_UNSET[@]}" \
   "${NATIVE_ENV[@]}" \
+  "${ACCOUNT_ENV[@]}" \
   LLM_MAIN_MANAGED_DELEGATION=1 \
   LLM_MAIN_NATIVE_AGENTS="$NATIVE_AGENTS" \
   claude \
@@ -117,4 +140,5 @@ exec env \
     --disallowedTools "${DENIED[@]}" \
     --system-prompt-snapshot off \
     --append-system-prompt "$PROMPT" \
+    "${ACCOUNT_ARGS[@]}" \
     "${ARGS[@]}"

@@ -40,3 +40,11 @@
 - 명령마다 승인 요청과 bubblewrap 경고: `bwrap --unshare-user --ro-bind / / /bin/true`가 실패하면 AppArmor 사용자 네임스페이스 제한이다. `codex-bootstrap --sudo`가 배포판에 맞는 조치를 수행하거나 명령을 출력한다.
 - `ocx stop` 뒤 모델이 gpt로 돌아감: `config.toml`의 `model` 줄은 원복 때 지워진다. 모델은 프로파일 파일에 둔다.
 - 자세한 원인·해결 표는 [CODEX_ANTHROPIC.md](CODEX_ANTHROPIC.md)에 있다.
+
+## 메인 계정 선택
+
+- `unknown account`: `--account` 값이 `accounts.json`의 이름이나 별칭이 아니다. `llm-account list`로 확인한다.
+- `no anthropic-apikey key is labelled ...`: OpenCodex 키 풀에 그 계정의 키가 없다. 키 라벨이 계정 이름이거나 `${ANTHROPIC_API_KEY_<이름>}` 참조여야 한다.
+- 다른 Codex 세션의 계정이 같이 바뀜: 활성 키는 프록시 전체에 하나다. 의도된 동작이며 현재 값은 `llm-account current`로 본다.
+- 계정을 고르지 않았는데 묻지도 않음: 터미널이 아닌 실행이거나 `accounts.json`이 없다. 이때는 현재 계정 그대로 띄운다.
+- 자세한 구성은 [ACCOUNTS.md](ACCOUNTS.md)에 있다.

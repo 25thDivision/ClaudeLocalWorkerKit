@@ -94,6 +94,21 @@ claude-duo -n ozaki --backends lab
 메인이 태스크를 등록하면 풀이 실행하고, `worker-task wait`로 기다린 뒤 검증 결과와 변경을 검토합니다.
 기본 메인은 Codex의 기존 계정/모델 설정 또는 Claude 계정의 Opus입니다. 일반 위임은 같은 관리 실행기를 사용하며, 네이티브 판단·리뷰도 기본으로 선택할 수 있습니다.
 
+### 메인 계정 선택
+
+Claude 계정이나 Anthropic API 키를 둘 이상 쓰면 메인을 띄울 때 계정을 고를 수 있습니다.
+등록하지 않으면 묻지 않고 이전과 똑같이 동작합니다.
+
+```bash
+llm-account init                 # 계정 등록 파일 생성 (예시: INDIVIDUAL, TEAM)
+claude-duo --account team        # 지정해서 시작
+codex-duo                        # 터미널이면 메뉴로 묻습니다
+```
+
+Claude 메인은 계정별 설정 디렉터리를, Codex 메인은 OpenCodex 키 풀의 활성 키를 바꿉니다.
+현재 계정은 Claude의 상태 표시줄과 Codex의 터미널 제목에 표시합니다. 워커에는 영향이 없습니다.
+구성 방법과 주의점은 [메인 계정 선택](docs/ACCOUNTS.md)에 있습니다.
+
 ### 창 없이 실행하거나 창으로 확인
 
 ```bash

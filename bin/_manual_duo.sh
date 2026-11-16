@@ -3,7 +3,7 @@
 set -euo pipefail
 source "$(dirname "$(readlink -f "$0")")/_kit_env.sh"
 BIN="$(dirname "$(readlink -f "$0")")"
-N=1; PROFILES=""; DIR="$PWD"; NAME="${ORCHESTRATOR_NAME:-}"; KILL=0; PERMISSIONS=(); NATIVE_AGENTS=selective
+N=1; PROFILES=""; DIR="$PWD"; NAME="${ORCHESTRATOR_NAME:-}"; KILL=0; PERMISSIONS=(); NATIVE_AGENTS=selective; ACCOUNT=""
 while [ $# -gt 0 ]; do
  case "$1" in
   --kill) KILL=1; shift;;
@@ -11,11 +11,13 @@ while [ $# -gt 0 ]; do
   --name=*) NAME="${1#*=}"; [ -n "$NAME" ] || exit 2; shift;;
   --native-agents) [ $# -ge 2 ] || exit 2; NATIVE_AGENTS="$2"; shift 2;;
   --native-agents=*) NATIVE_AGENTS="${1#*=}"; shift;;
+  --account) [ $# -ge 2 ] && [ -n "$2" ] || exit 2; ACCOUNT="$2"; shift 2;;
+  --account=*) ACCOUNT="${1#*=}"; [ -n "$ACCOUNT" ] || exit 2; shift;;
   -w|--workers) [ $# -ge 2 ] || exit 2; N="$2"; shift 2;;
   -P|--profile|--profiles) [ $# -ge 2 ] || exit 2; PROFILES="$2"; shift 2;;
   --permission-profile|--permissions-file|--read-path|--scratch-path)
     [ $# -ge 2 ] || exit 2; PERMISSIONS+=("$1" "$2"); shift 2;;
-  -h|--help) echo 'claude-duo --manual [-n main-name] [-w N] [-P profiles] [--native-agents off|selective] [--permission-profile workspace] [project]'; exit;;
+  -h|--help) echo 'claude-duo --manual [-n main-name] [--account name] [-w N] [-P profiles] [--native-agents off|selective] [--permission-profile workspace] [project]'; exit;;
   -*) echo 'unknown manual option' >&2; exit 2;;
   *) DIR="$1"; shift;;
  esac
@@ -59,7 +61,10 @@ import json, sys
 print(json.dumps(dict(project=sys.argv[1], tmux_session=sys.argv[2], workers=sys.argv[3:]), ensure_ascii=False))
 PY
 )"
-printf -v main '%q ' env "LLM_MANUAL_WORKERS=$CONTEXT" "$BIN/claude-main" --name "$NAME" --native-agents "$NATIVE_AGENTS"
+# Ask for the main's account here: inside the detached tmux session nobody could answer.
+ACCOUNT="$(python3 "$BIN/_accounts.py" choose ${ACCOUNT:+--account "$ACCOUNT"})" || exit $?
+ACCOUNT_ARGS=(); [ -z "$ACCOUNT" ] || ACCOUNT_ARGS=(--account "$ACCOUNT")
+printf -v main '%q ' env "LLM_MANUAL_WORKERS=$CONTEXT" "$BIN/claude-main" --name "$NAME" --native-agents "$NATIVE_AGENTS" "${ACCOUNT_ARGS[@]}"
 tmux new-session -d -s "$SESSION" -c "$DIR" -x 200 -y 60 "$main; exec bash"
 for i in "${!COMMANDS[@]}"; do
  pane="$(tmux split-window -P -F '#{pane_id}' -t "=$SESSION" -c "$DIR" "${COMMANDS[$i]}")"

@@ -106,7 +106,7 @@ class BootstrapTests(unittest.TestCase):
         mock(self.bin / 'loginctl', '#!/bin/sh\necho no\n')
         # The proxy "process": carries the key variable names (values are fake) for the /proc environ check.
         self.proxy = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)'],
-                                      env=dict(os.environ, ANTHROPIC_API_KEY_PRIMARY=FAKE_KEY, ANTHROPIC_API_KEY_SECONDARY=FAKE_KEY))
+                                      env=dict(os.environ, ANTHROPIC_API_KEY_INDIVIDUAL=FAKE_KEY, ANTHROPIC_API_KEY_TEAM=FAKE_KEY))
         self.addCleanup(self.stop, self.proxy)
         self.port = free_port()
         self.env = {k: v for k, v in os.environ.items() if not k.startswith(('LLM_', 'ANTHROPIC_', 'CODEX_'))}
@@ -158,9 +158,9 @@ class BootstrapTests(unittest.TestCase):
         out = self.run_tool('--yes')
         keys = self.home / '.config/opencodex/keys.env'
         self.assertEqual(stat.S_IMODE(keys.stat().st_mode), 0o600)
-        self.assertEqual(keys.read_text(), 'ANTHROPIC_API_KEY_PRIMARY=\nANTHROPIC_API_KEY_SECONDARY=\n')
+        self.assertEqual(keys.read_text(), 'ANTHROPIC_API_KEY_INDIVIDUAL=\nANTHROPIC_API_KEY_TEAM=\n')
         add = next(c for c in self.calls() if c[:2] == ['provider', 'add'])
-        self.assertIn('${ANTHROPIC_API_KEY_PRIMARY}', add)
+        self.assertIn('${ANTHROPIC_API_KEY_INDIVIDUAL}', add)
         self.assertIn('--default-model', add)
         self.assertEqual(add[add.index('--default-model') + 1], 'claude-fable-5-2')
         dropin = self.home / '.config/systemd/user/opencodex-proxy.service.d/override.conf'
@@ -178,7 +178,7 @@ class BootstrapTests(unittest.TestCase):
         self.assertIn('[todo] sandbox', out)
         self.assertNotIn(FAKE_KEY, out)
         # Filled values stay private: a second run reads names only and changes nothing.
-        keys.write_text('ANTHROPIC_API_KEY_PRIMARY=' + FAKE_KEY + '\nANTHROPIC_API_KEY_SECONDARY=' + FAKE_KEY + '\n')
+        keys.write_text('ANTHROPIC_API_KEY_INDIVIDUAL=' + FAKE_KEY + '\nANTHROPIC_API_KEY_TEAM=' + FAKE_KEY + '\n')
         before = {p: p.read_text() for p in (dropin, self.home / '.codex/orch.config.toml', self.conf / 'codex-profile')}
         out = self.run_tool('--yes')
         self.assertIn('0 changed', out)
@@ -192,11 +192,11 @@ class BootstrapTests(unittest.TestCase):
         codex.mkdir()
         (codex / 'orch.config.toml').write_text('sandbox_mode = "read-only"\n\n[projects."/x"]\ntrust_level = "trusted"\n')
         (self.home / '.config/opencodex').mkdir(parents=True)
-        (self.home / '.config/opencodex/keys.env').write_text('export ANTHROPIC_API_KEY_PRIMARY=\nexport ANTHROPIC_API_KEY_SECONDARY=\n')
+        (self.home / '.config/opencodex/keys.env').write_text('export ANTHROPIC_API_KEY_INDIVIDUAL=\nexport ANTHROPIC_API_KEY_TEAM=\n')
         out = self.run_tool('--yes')
         self.assertIn('[warn] codex profile', out)
         self.assertIn('removed `export`', out)
-        self.assertEqual((self.home / '.config/opencodex/keys.env').read_text(), 'ANTHROPIC_API_KEY_PRIMARY=\nANTHROPIC_API_KEY_SECONDARY=\n')
+        self.assertEqual((self.home / '.config/opencodex/keys.env').read_text(), 'ANTHROPIC_API_KEY_INDIVIDUAL=\nANTHROPIC_API_KEY_TEAM=\n')
         self.run_tool('--yes', '--force')
         text = (codex / 'orch.config.toml').read_text()
         self.assertIn('sandbox_mode = "workspace-write"', text)
