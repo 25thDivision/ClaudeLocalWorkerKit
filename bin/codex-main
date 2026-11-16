@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 from _kit_env import configure
 from _main_policy import native_args, render
-from _accounts import PROVIDER, choose, codex_current, codex_use, registry, take_account
+from _accounts import PROVIDER, choose, codex_current, codex_use, label, registry, take_account
 configure()
 try:
     native_mode, forward = native_args(sys.argv[1:])
@@ -20,6 +20,7 @@ try:
             shown = codex_current()
         except ValueError:
             shown = ''
+    shown = label(shown) if shown else ''
 except ValueError as exc:
     print('codex-main: ' + str(exc), file=sys.stderr)
     raise SystemExit(2)

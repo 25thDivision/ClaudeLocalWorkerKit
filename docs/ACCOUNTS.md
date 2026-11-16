@@ -17,14 +17,15 @@ llm-account list        # 계정별 Claude 로그인과 Codex 활성 키
 
 ```json
 {"accounts": {
-  "INDIVIDUAL": {"aliases": ["personal", "indiv"], "claude_config_dir": ""},
-  "TEAM": {"aliases": [], "claude_config_dir": "~/.claude-team"}
+  "INDIVIDUAL": {"label": "Personal", "aliases": ["personal", "indiv"], "claude_config_dir": ""},
+  "TEAM": {"label": "Team", "aliases": [], "claude_config_dir": "~/.claude-team"}
 }}
 ```
 
 | 필드 | 뜻 |
 |---|---|
-| 이름 | 대문자 식별자. 메뉴, 화면 표시, API 키 변수명 접미사에 쓴다 |
+| 이름 | 대문자 식별자. `--account` 값과 API 키 변수명 접미사에 쓴다 |
+| `label` | 선택 항목. 메뉴, 상태 표시줄, 터미널 제목에 보이는 글자. 없으면 이름을 쓴다. `--account`에도 쓸 수 있다 |
 | `aliases` | `--account`에 쓸 수 있는 다른 이름. 대소문자는 구분하지 않는다 |
 | `claude_config_dir` | 이 계정의 Claude 설정 디렉터리. 비우면 기본 `~/.claude` |
 | `codex_key` | 선택 항목. OpenCodex 키 라벨이 계정 이름과 다를 때 적는다 |
@@ -100,14 +101,15 @@ printf %s '${ANTHROPIC_API_KEY_TEAM}' | ocx account add-key anthropic-apikey --l
 
 | 메인 | 표시 위치 | 내용 |
 |---|---|---|
-| Claude | 입력창 아래 상태 표시줄 | 계정 이름, 로그인 이메일, 요금제 |
-| Codex | 시작 직전 한 줄과 터미널 제목 | `Account: TEAM`, `codex [TEAM]` |
+| Claude | 입력창 아래 상태 표시줄 | 계정 표시 이름과 로그인 이메일. 예 `Team · you@example.org` |
+| Codex | 시작 직전 한 줄과 터미널 제목 | `Account: Team`, `codex [Team]` |
 | Codex `--panes` | 키트가 만든 tmux 세션의 상태 줄 | 현재 활성 키의 계정 |
 
 - Claude 표시는 시작할 때 `claude auth status`가 알려 준 값이다. 세션 안에서 `/login`으로 계정을 바꾸면 표시와 달라진다
 - Codex의 시작 줄과 제목도 시작 시점 값이다. 다른 곳에서 활성 키를 바꿔도 따라가지 않는다. `--panes` 세션의 상태 줄과 `llm-account current`는 현재 값을 읽는다
 - Codex는 기본적으로 터미널 제목을 프로젝트 이름으로 바꾼다. 계정을 고른 세션에서는 `tui.terminal_title=[]`로 이를 끄고 실행기가 쓴 제목을 유지한다. tmux는 기본 상태 줄에 창 제목 앞 21자를 보여 준다
 - `claude-main`에 `--settings`를 직접 넘기면 계정 상태 표시줄은 붙이지 않는다
+- 표시되는 글자를 바꾸려면 `accounts.json`의 `label`만 고친다. 다음에 띄우는 세션부터 적용되며 디렉터리나 키 연결에는 영향이 없다
 
 ## 확인된 버전
 

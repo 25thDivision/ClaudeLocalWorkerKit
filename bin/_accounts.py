@@ -13,8 +13,8 @@ configure()
 PROVIDER = 'anthropic-apikey'
 KEY_PREFIX = 'ANTHROPIC_API_KEY_'
 SHARED = ('CLAUDE.md', 'projects')  # linked into an account directory; settings.json is copied
-TEMPLATE = {'accounts': {'INDIVIDUAL': {'aliases': ['personal', 'indiv'], 'claude_config_dir': ''},
-                         'TEAM': {'aliases': [], 'claude_config_dir': '~/.claude-team'}}}
+TEMPLATE = {'accounts': {'INDIVIDUAL': {'label': 'Personal', 'aliases': ['personal', 'indiv'], 'claude_config_dir': ''},
+                         'TEAM': {'label': 'Team', 'aliases': [], 'claude_config_dir': '~/.claude-team'}}}
 
 
 def path():
@@ -32,11 +32,17 @@ def registry():
     return accounts
 
 
+def label(name, accounts=None):
+    """Text shown for an account (status line, title, menu); a key no account owns shows as itself."""
+    entry = (registry() if accounts is None else accounts).get(name) or {}
+    return entry.get('label') or name
+
+
 def resolve(value, accounts=None):
     accounts = registry() if accounts is None else accounts
     wanted = value.strip().lower()
     for name, entry in accounts.items():
-        if wanted in [name.lower(), *(alias.lower() for alias in entry.get('aliases', []))]:
+        if wanted in [name.lower(), (entry.get('label') or name).lower(), *(alias.lower() for alias in entry.get('aliases', []))]:
             return name
     raise ValueError('unknown account ' + repr(value) + '; registered: ' + (', '.join(accounts) or 'none (run llm-account init)'))
 
@@ -87,10 +93,11 @@ def choose(kind, value=None):
     if not accounts or not interactive():
         return None
     names = list(accounts)
-    width = max(map(len, names))
+    shown = [label(name, accounts) for name in names]
+    width = max(map(len, shown))
     sys.stderr.write('Account for this ' + kind + ' session:\n')
-    for index, (name, detail) in enumerate(zip(names, describe(kind, names, accounts)), 1):
-        sys.stderr.write('  ' + str(index) + ') ' + name.ljust(width) + ('  ' + detail if detail else '') + '\n')
+    for index, (text, detail) in enumerate(zip(shown, describe(kind, names, accounts)), 1):
+        sys.stderr.write('  ' + str(index) + ') ' + text.ljust(width) + ('  ' + detail if detail else '') + '\n')
     while True:
         answer = ask('Choose [1-' + str(len(names)) + ' or a name]: ')
         if answer.isdigit() and 1 <= int(answer) <= len(names):
@@ -132,7 +139,7 @@ def claude_identity(folder=None):
         return 'login unknown'
     if not isinstance(data, dict) or not data.get('loggedIn'):
         return 'not logged in'
-    return ' · '.join(x for x in (data.get('email'), data.get('subscriptionType')) if x) or 'logged in'
+    return data.get('email') or 'logged in'
 
 
 def link(name, accounts=None):
@@ -176,10 +183,10 @@ def claude_launch(value=None):
     if name:
         ensure_claude_dir(name, accounts)
         folder = claude_dir(name, accounts)
-        label = name + ' · ' + claude_identity(folder)
+        text = label(name, accounts) + ' · ' + claude_identity(folder)
     else:
-        folder, label = None, claude_identity(os.environ.get('CLAUDE_CONFIG_DIR'))
-    settings = {'statusLine': {'type': 'command', 'command': 'printf %s ' + shlex.quote(label)}}
+        folder, text = None, claude_identity(os.environ.get('CLAUDE_CONFIG_DIR'))
+    settings = {'statusLine': {'type': 'command', 'command': 'printf %s ' + shlex.quote(text)}}
     return name or '', str(folder or ''), json.dumps(settings, ensure_ascii=False)
 
 

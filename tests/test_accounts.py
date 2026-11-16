@@ -113,20 +113,29 @@ class Accounts(unittest.TestCase):
         self.register()
         result = self.main('claude', '--account', 'team', '--resume', 'existing')
         self.assertEqual(result['config_dir'], str(self.team))
-        self.assertEqual(self.status_line(result), "printf %s 'TEAM · team@example.org · team'")
+        self.assertEqual(self.status_line(result), "printf %s 'Team · team@example.org'")
         self.assertIn('--resume', result['args'])
         self.assertNotIn('--account', result['args'])
         # INDIVIDUAL is Claude Code's default directory even when another one is inherited.
         for alias in ('personal', 'indiv', 'Individual'):
             result = self.main('claude', '--account=' + alias, env=dict(self.env, CLAUDE_CONFIG_DIR=str(self.team)))
             self.assertIsNone(result['config_dir'])
-            self.assertEqual(self.status_line(result), "printf %s 'INDIVIDUAL · me@example.org · max'")
+            self.assertEqual(self.status_line(result), "printf %s 'Personal · me@example.org'")
+        # The label is display text only: without one the account name is shown, and --account accepts either.
+        registry = self.root / 'conf/accounts.json'
+        data = json.loads(registry.read_text())
+        data['accounts']['TEAM']['label'] = 'Lab seat'
+        del data['accounts']['INDIVIDUAL']['label']
+        registry.write_text(json.dumps(data))
+        self.assertEqual(self.status_line(self.main('claude', '--account', 'lab seat')), "printf %s 'Lab seat · team@example.org'")
+        self.assertEqual(self.status_line(self.main('claude', '--account', 'team')), "printf %s 'Lab seat · team@example.org'")
+        self.assertEqual(self.status_line(self.main('claude', '--account', 'indiv')), "printf %s 'INDIVIDUAL · me@example.org'")
 
     def test_unattended_start_keeps_the_current_account_and_shows_its_real_login(self):
         self.register()
         result = self.main('claude', '-p', 'fixture', env=dict(self.env, CLAUDE_CONFIG_DIR=str(self.team)))
         self.assertEqual(result['config_dir'], str(self.team))
-        self.assertEqual(self.status_line(result), "printf %s 'team@example.org · team'")
+        self.assertEqual(self.status_line(result), 'printf %s team@example.org')
         result = self.main('claude', '--settings', '{"theme":"dark"}', '-p', 'fixture')
         self.assertEqual(result['args'].count('--settings'), 1)
         self.assertIsNone(result['config_dir'])
@@ -150,8 +159,9 @@ class Accounts(unittest.TestCase):
         self.assertEqual((self.team / 'settings.json').read_text(), '{"theme": "dark"}\n')
         self.assertEqual((self.root / '.claude/settings.json').read_text(), '{"theme": "auto"}\n')
         listing = self.tool(self.bin / 'llm-account', 'list').stdout
-        self.assertIn('team@example.org · team', listing)
-        self.assertEqual(self.tool(self.bin / 'llm-account', 'current').stdout.strip(), 'TEAM')
+        self.assertIn('team@example.org', listing)
+        self.assertIn('TEAM  shown as Team', listing)
+        self.assertEqual(self.tool(self.bin / 'llm-account', 'current').stdout.strip(), 'Team')
 
     def test_codex_account_switches_the_active_key_and_keeps_the_title(self):
         self.register()
@@ -160,8 +170,8 @@ class Accounts(unittest.TestCase):
         self.assertIn(['account', 'use', 'anthropic-apikey', 'aaaa1111'], [x['args'] for x in self.recorded('ocx')])
         self.assertLess(args.index('tui.terminal_title=[]'), args.index('--'))
         self.assertEqual(args[args.index('--') + 1:], ['--account', 'team'])
-        self.assertIn('Account: INDIVIDUAL', run.stderr)
-        self.assertEqual(self.tool(self.bin / 'llm-account', 'current').stdout.strip(), 'INDIVIDUAL')
+        self.assertIn('Account: Personal', run.stderr)
+        self.assertEqual(self.tool(self.bin / 'llm-account', 'current').stdout.strip(), 'Personal')
         # The already active key is not switched again.
         before = len(self.recorded('ocx'))
         self.main('codex', '--account', 'INDIVIDUAL')
